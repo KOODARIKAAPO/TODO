@@ -1,60 +1,64 @@
 import { StatusBar } from 'expo-status-bar';
 import {StyleSheet,Text,View,TextInput,TouchableOpacity,FlatList,} from 'react-native';
 import { useEffect, useState } from 'react';
-import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Todo } from './types/Todo';
 import { TodoItem } from './components/Row';
 
+const STORAGE_KEY = 'todos';
+
 export default function App() {
-  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputText, setInputText] = useState('');
 
   useEffect(() => {
-    const initDB = async () => {
-      const database = await SQLite.openDatabaseAsync('todos.db');
-      setDb(database);
-
-      await database.execAsync(`
-        CREATE TABLE IF NOT EXISTS todos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          text TEXT NOT NULL,
-          completed INTEGER DEFAULT 0
-        );
-      `);
-
-      loadTodos(database);
+    const loadTodos = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        setTodos(JSON.parse(raw));
+      } catch (error) {
+        console.warn('Failed to load todos', error);
+      }
     };
 
-    initDB();
+    loadTodos();
   }, []);
 
-  const loadTodos = async (database: SQLite.SQLiteDatabase) => {
-    const result = await database.getAllAsync<Todo>(
-      'SELECT * FROM todos ORDER BY id DESC'
-    );
-    setTodos(result);
+  const saveTodos = async (nextTodos: Todo[]) => {
+    setTodos(nextTodos);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextTodos));
+    } catch (error) {
+      console.warn('Failed to save todos', error);
+    }
   };
 
   const addTodo = async () => {
-    if (!inputText.trim() || !db) return;
+    const text = inputText.trim();
+    if (!text) return;
 
-    await db.runAsync('INSERT INTO todos (text) VALUES (?)', [inputText.trim()]);
+    const nextTodo: Todo = {
+      id: Date.now(),
+      text,
+      completed: 0,
+    };
+    const nextTodos = [nextTodo, ...todos];
     setInputText('');
-    loadTodos(db);
+    await saveTodos(nextTodos);
   };
 
   const toggleTodo = async (id: number, completed: number) => {
-    if (!db) return;
     const next = completed ? 0 : 1;
-    await db.runAsync('UPDATE todos SET completed = ? WHERE id = ?', [next, id]);
-    loadTodos(db);
+    const nextTodos = todos.map((todo) =>
+      todo.id === id ? { ...todo, completed: next } : todo
+    );
+    await saveTodos(nextTodos);
   };
 
   const deleteTodo = async (id: number) => {
-    if (!db) return;
-    await db.runAsync('DELETE FROM todos WHERE id = ?', [id]);
-    loadTodos(db);
+    const nextTodos = todos.filter((todo) => todo.id !== id);
+    await saveTodos(nextTodos);
   };
 
   return (
@@ -92,42 +96,61 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingTop: 60,
-    paddingHorizontal: 20,
+    backgroundColor: '#F2F0E7',
+    paddingTop: 70,
+    paddingHorizontal: 18,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '700',
+    marginBottom: 18,
+    textAlign: 'left',
+    color: '#2F3E2F',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   inputContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   input: {
     flex: 1,
-    backgroundColor: 'white',
-    paddingHorizontal: 15,
+    backgroundColor: '#FFFBF4',
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
-    marginRight: 10,
+    borderRadius: 14,
+    marginRight: 12,
     fontSize: 16,
+    color: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#E4DEC8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   addButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
+    backgroundColor: '#2F3E2F',
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   addButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
+    color: '#F9F5E9',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   list: {
     flex: 1,
+    marginTop: 6,
   },
 });

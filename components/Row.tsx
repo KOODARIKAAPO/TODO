@@ -9,6 +9,7 @@ type Props = {
 };
 
 export function TodoItem({ item, toggleTodo, deleteTodo }: Props) {
+  
   const done = item.completed === 1;
 
   return (
